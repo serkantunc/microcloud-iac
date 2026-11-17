@@ -1,0 +1,22 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+terraform.tfvars
+!examples/**/*.tfvars
+
+# Ansible
+*.retry
+ansible/inventory/generated.ini
+
+# Secrets / local
+.env
+*.pem
+id_*
+!id_*.pub
+
+# Editors
+.vscode/
+*.swp
