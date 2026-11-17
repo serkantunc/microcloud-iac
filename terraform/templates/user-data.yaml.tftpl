@@ -21,10 +21,3 @@ chpasswd:
 %{ endif ~}
 
 ssh_pwauth: false
-
-package_update: true
-packages:
-  - qemu-guest-agent
-
-runcmd:
-  - systemctl enable --now qemu-guest-agent
