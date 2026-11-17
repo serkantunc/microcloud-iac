@@ -1,0 +1,5 @@
+- name: Restart snapd
+  ansible.builtin.systemd:
+    name: snapd.service
+    state: restarted
+    daemon_reload: true

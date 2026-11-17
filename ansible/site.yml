@@ -1,0 +1,5 @@
+- name: Prepare MicroCloud nodes
+  hosts: microcloud
+  become: true
+  roles:
+    - common
