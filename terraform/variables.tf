@@ -52,9 +52,9 @@ variable "pool_path" {
 }
 
 variable "ubuntu_image_url" {
-  description = "Ubuntu 24.04 LTS (Noble) cloud image"
+  description = "Ubuntu 26.04 LTS (Resolute) cloud image"
   type        = string
-  default     = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  default     = "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img"
 }
 
 variable "bridge_name" {

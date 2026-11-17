@@ -14,7 +14,7 @@ resource "libvirt_pool" "microcloud" {
 }
 
 resource "libvirt_volume" "ubuntu_base" {
-  name = "noble-server-cloudimg-amd64.qcow2"
+  name = replace(basename(var.ubuntu_image_url), ".img", ".qcow2")
   pool = libvirt_pool.microcloud.name
 
   target = {

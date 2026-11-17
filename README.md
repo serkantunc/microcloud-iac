@@ -3,6 +3,9 @@
 Infrastructure-as-Code for a **3-node Canonical MicroCloud** lab on KVM/libvirt,
 with **MicroK8s** planned as a workload on top.
 
+Target stack (MicroCloud 3 LTS line): MicroCloud 3.4, LXD 6, MicroCeph Tentacle and
+MicroOVN 26.03 on Ubuntu 26.04 LTS.
+
 - **Terraform** (libvirt provider 0.9.x) provisions storage, cloud-init seeds and VMs
 - **Ansible** *(Phase 2)* installs and initialises MicroCloud (LXD + MicroCeph + MicroOVN)
 - **Validation** *(Phase 3)* checks the cluster after deployment
@@ -20,7 +23,7 @@ KVM host
 
 | Component | Details |
 |-----------|---------|
-| OS | Ubuntu 24.04 LTS cloud image, shared as a read-only backing file (copy-on-write per node) |
+| OS | Ubuntu 26.04 LTS cloud image, shared as a read-only backing file (copy-on-write per node) |
 | `mgmt` NIC | Static IP; management, cluster and Ceph traffic |
 | `uplink` NIC | Up with no address; reserved for the MicroOVN uplink network |
 | Ceph disk | Empty disk per node, exposed as `/dev/disk/by-id/virtio-<node>-ceph` |
@@ -97,9 +100,11 @@ PCIe NIC for the bridge.
 cloud-init only sets hostname, user, SSH key and networking, so nodes come up even
 without internet access. Packages and MicroCloud are handled by Ansible.
 
-## Status
+## Roadmap
 
 - [x] Phase 1 – Terraform: storage, cloud-init, VMs
-- [ ] Phase 2 – Ansible: MicroCloud + MicroK8s
-- [ ] Phase 3 – Validation + AI agent
-- [ ] Phase 4 – Docs, diagrams, NAT network mode, optional COS on a separate host
+- [ ] Phase 2 – Ansible: snapd check, MicroCloud 3.4 via preseed, UI access link
+- [ ] Phase 3 – Validation and an AI agent that runs and checks the deployment (local LLM via Ollama)
+- [ ] Phase 4 – Observability: Juju, MicroK8s and COS Lite on a separate host, `microcloud` charm for metrics
+- [ ] Phase 5 – MicroCloud Cluster Manager with an external OIDC provider
+- [ ] Extras – MicroK8s as a workload on MicroCloud, decommission playbook, NAT network mode
