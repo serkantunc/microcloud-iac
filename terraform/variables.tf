@@ -14,6 +14,11 @@ variable "nodes" {
     micro2 = { ip = "192.168.1.62" }
     micro3 = { ip = "192.168.1.63" }
   }
+
+  validation {
+    condition     = alltrue([for n in values(var.nodes) : tonumber(split(".", n.ip)[3]) < 100])
+    error_message = "The last octet of each node IP must be below 100; it is reused in the node MAC addresses."
+  }
 }
 
 variable "node_vcpu" {
@@ -81,4 +86,16 @@ variable "vm_user" {
 variable "ssh_public_key_path" {
   type    = string
   default = "~/.ssh/id_rsa.pub"
+}
+
+variable "vm_console_password" {
+  description = "Password for serial console login only. Empty disables password login."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "timezone" {
+  type    = string
+  default = "Etc/UTC"
 }

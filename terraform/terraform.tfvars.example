@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars and adjust to your environment.
+
+# nodes = {
+#   micro1 = { ip = "192.168.1.61" }
+#   micro2 = { ip = "192.168.1.62" }
+#   micro3 = { ip = "192.168.1.63" }
+# }
+
+# bridge_name         = "br-mc"
+# gateway             = "192.168.1.1"
+# dns_servers         = ["1.1.1.1", "192.168.1.1"]
+# ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+# timezone            = "Europe/Istanbul"
+
+# node_vcpu       = 6
+# node_memory_mib = 12288
+
+# vm_console_password = "change-me"

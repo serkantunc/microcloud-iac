@@ -1,0 +1,30 @@
+#cloud-config
+hostname: ${hostname}
+timezone: ${timezone}
+
+users:
+  - name: ${user}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: ${console_password == "" ? "true" : "false"}
+    ssh_authorized_keys:
+      - ${jsonencode(ssh_public_key)}
+%{ if console_password != "" ~}
+
+chpasswd:
+  expire: false
+  users:
+    - name: ${user}
+      password: ${jsonencode(console_password)}
+      type: text
+%{ endif ~}
+
+ssh_pwauth: false
+
+package_update: true
+packages:
+  - qemu-guest-agent
+
+runcmd:
+  - systemctl enable --now qemu-guest-agent

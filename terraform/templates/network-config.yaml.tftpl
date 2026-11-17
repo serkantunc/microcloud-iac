@@ -1,0 +1,23 @@
+version: 2
+ethernets:
+  mgmt:
+    match:
+      macaddress: "${mac_mgmt}"
+    set-name: mgmt
+    dhcp4: false
+    dhcp6: false
+    addresses:
+      - ${ip}/${prefix}
+    routes:
+      - to: default
+        via: ${gateway}
+    nameservers:
+      addresses: [${join(", ", dns_servers)}]
+  uplink:
+    match:
+      macaddress: "${mac_uplink}"
+    set-name: uplink
+    dhcp4: false
+    dhcp6: false
+    accept-ra: false
+    link-local: []
