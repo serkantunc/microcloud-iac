@@ -9,7 +9,7 @@ terraform.tfvars
 
 # Ansible
 *.retry
-ansible/inventory/generated.ini
+ansible/inventory/hosts.yml
 
 # Secrets / local
 .env
@@ -20,3 +20,4 @@ id_*
 # Editors
 .vscode/
 *.swp
+provider-schema.json
