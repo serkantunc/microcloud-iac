@@ -1,0 +1,30 @@
+initiator_address: {{ microcloud_initiator_address }}
+lookup_timeout: {{ microcloud_lookup_timeout }}
+
+session_passphrase: "{{ microcloud_session_passphrase }}"
+session_timeout: {{ microcloud_session_timeout }}
+
+systems:
+{% for host in groups['microcloud'] %}
+- name: {{ host }}
+  address: {{ hostvars[host].ansible_host }}
+  ovn_uplink_interface: {{ microcloud_ovn_uplink_interface }}
+  storage:
+    local:
+      path: /dev/disk/by-id/virtio-{{ host }}-local
+      wipe: true
+    ceph:
+      - path: /dev/disk/by-id/virtio-{{ host }}-ceph
+        wipe: true
+        encrypt: false
+{% endfor %}
+
+ceph:
+  cephfs: {{ microcloud_cephfs | lower }}
+  internal_network: {{ ceph_network_cidr }}
+  public_network: {{ mgmt_network_cidr }}
+
+ovn:
+  ipv4_gateway: {{ ovn_ipv4_gateway }}
+  ipv4_range: {{ ovn_ipv4_range }}
+  dns_servers: {{ ovn_dns_servers }}

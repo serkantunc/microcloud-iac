@@ -100,6 +100,12 @@ variable "dns_servers" {
   default = ["1.1.1.1", "192.168.1.1"]
 }
 
+variable "ovn_ipv4_range" {
+  description = "Addresses on the uplink network that LXD assigns to OVN networks"
+  type        = string
+  default     = "192.168.1.70-192.168.1.109"
+}
+
 variable "vm_user" {
   type    = string
   default = "ubuntu"

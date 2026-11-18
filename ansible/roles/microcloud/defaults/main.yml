@@ -7,3 +7,16 @@ microcloud_snaps:
     channel: "26.03/stable"
   - name: microcloud
     channel: "3/stable"
+
+microcloud_initiator_address: "{{ hostvars[groups['microcloud'][0]].ansible_host }}"
+microcloud_session_passphrase: >-
+  {{ lookup('ansible.builtin.password',
+            playbook_dir ~ '/.secrets/microcloud_session_passphrase',
+            chars=['ascii_letters', 'digits'], length=32) }}
+microcloud_lookup_timeout: 300
+microcloud_session_timeout: 300
+
+microcloud_ovn_uplink_interface: uplink
+microcloud_cephfs: true
+
+microcloud_preseed_path: /root/microcloud-preseed.yaml
