@@ -1,0 +1,46 @@
+---
+- name: Issue an initial LXD UI access link
+  hosts: "{{ groups['microcloud'][0] }}"
+  become: true
+  gather_facts: false
+
+  vars:
+    ui_link_file: "{{ playbook_dir }}/.secrets/ui-link.txt"
+
+  tasks:
+    - name: Issue initial UI access token
+      ansible.builtin.command: lxd init --ui-initial-access-link
+      register: ui_link_result
+      no_log: true
+
+    - name: Extract access link
+      ansible.builtin.set_fact:
+        ui_access_line: "{{ ui_link_result.stdout_lines | select('search', 'UI initial access link') | first | default('') }}"
+      no_log: true
+
+    - name: Fail if no link was returned
+      ansible.builtin.fail:
+        msg: "lxd init did not return an access link."
+      when: ui_access_line == ''
+
+    - name: Parse link and expiry
+      ansible.builtin.set_fact:
+        ui_access_url: "{{ ui_access_line | regex_search('https://\\S+') }}"
+        ui_access_expiry: "{{ ui_access_line | regex_search('expires: ([^)]+)', '\\1') | first }}"
+      no_log: true
+
+    - name: Write access link to the controller
+      ansible.builtin.copy:
+        content: "{{ ui_access_url }}\n"
+        dest: "{{ ui_link_file }}"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Show where the link is
+      ansible.builtin.debug:
+        msg:
+          - "Access link written to {{ ui_link_file }}"
+          - "Expires: {{ ui_access_expiry }}. Running this playbook again revokes the previous link."
+          - "cat {{ ui_link_file }}"

@@ -58,10 +58,18 @@ terraform -chdir=terraform apply
 cd ansible
 ansible all -m wait_for_connection
 ansible-playbook site.yml
+ansible-playbook ui-link.yml
 ```
 
 The playbook ends with `microcloud status`. From an empty host to a `HEALTHY` three-node
 cluster took about 3.5 minutes in the reference lab, including image and snap downloads.
+
+`ui-link.yml` prints a one-time LXD UI access link (`lxd init --ui-initial-access-link`),
+valid for 24 hours, that logs in as an admin. The link is written to
+`ansible/.secrets/ui-link.txt` (mode 0600, not committed) rather than printed, because the
+token is long and terminal output wraps it. Use it to set up permanent access with a
+browser certificate or OIDC. It is kept out of `site.yml` so that a regular run does not
+issue a new token.
 
 Terraform writes `ansible/inventory/hosts.yml`, so node addresses and network settings are
 defined once in Terraform. Ansible generates the MicroCloud session passphrase on first run
@@ -152,7 +160,7 @@ traffic on its own network.
 
 - [x] Phase 1 – Terraform: storage, cloud-init, VMs
 - [x] Phase 2 – Ansible: snapd check, MicroCloud 3.4 via preseed
-  - [ ] LXD UI access link and admin identity via Ansible
+  - [x] LXD UI access link via Ansible
 - [ ] Phase 3 – Validation and an AI agent that runs and checks the deployment (local LLM via Ollama)
 - [ ] Phase 4 – Observability: Juju, MicroK8s and COS Lite on a separate host, `microcloud` charm for metrics
 - [ ] Phase 5 – MicroCloud Cluster Manager with an external OIDC provider
