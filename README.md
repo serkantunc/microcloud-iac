@@ -152,7 +152,7 @@ traffic on its own network.
 
 - [x] Phase 1 – Terraform: storage, cloud-init, VMs
 - [x] Phase 2 – Ansible: snapd check, MicroCloud 3.4 via preseed
-- [ ] UI access link and admin identity via Ansible
+  - [ ] LXD UI access link and admin identity via Ansible
 - [ ] Phase 3 – Validation and an AI agent that runs and checks the deployment (local LLM via Ollama)
 - [ ] Phase 4 – Observability: Juju, MicroK8s and COS Lite on a separate host, `microcloud` charm for metrics
 - [ ] Phase 5 – MicroCloud Cluster Manager with an external OIDC provider
