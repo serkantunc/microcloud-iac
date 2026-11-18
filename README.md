@@ -59,23 +59,19 @@ cd ansible
 ansible all -m wait_for_connection
 ansible-playbook site.yml
 ansible-playbook ui-link.yml
+cat .secrets/ui-link.txt
 ```
 
-The playbook ends with `microcloud status`. From an empty host to a `HEALTHY` three-node
+`site.yml` ends with `microcloud status`. From an empty host to a `HEALTHY` three-node
 cluster took about 3.5 minutes in the reference lab, including image and snap downloads.
-
-`ui-link.yml` prints a one-time LXD UI access link (`lxd init --ui-initial-access-link`),
-valid for 24 hours, that logs in as an admin. The link is written to
-`ansible/.secrets/ui-link.txt` (mode 0600, not committed) rather than printed, because the
-token is long and terminal output wraps it. Use it to set up permanent access with a
-browser certificate or OIDC. It is kept out of `site.yml` so that a regular run does not
-issue a new token.
 
 Terraform writes `ansible/inventory/hosts.yml`, so node addresses and network settings are
 defined once in Terraform. Ansible generates the MicroCloud session passphrase on first run
 and keeps it in `ansible/.secrets/` (not committed).
 
-### What the playbook does
+### Playbooks
+
+#### `site.yml`: build the cluster
 
 - `common`: includes phased updates (all nodes get the same package versions), upgrades and
   reboots if needed, checks that snapd is at least 2.75 (required by MicroCloud 3.4)
@@ -83,7 +79,23 @@ and keeps it in `ansible/.secrets/` (not committed).
   MicroCloud 3 with `--cohort=+`, holds automatic refreshes, renders the preseed file and runs
   `microcloud preseed` on all nodes at once (skipped when the node is already a member)
 
-Running the playbook again reports `changed=0`.
+Running it again reports `changed=0`.
+
+#### `ui-link.yml`: initial LXD UI access
+
+- Runs `lxd init --ui-initial-access-link` on the first node, which creates the
+  `ui-admin-initial` identity and issues a bearer token valid for 24 hours
+- Writes the link to `ansible/.secrets/ui-link.txt` on the controller (mode 0600, not
+  committed) instead of printing it: the token is long and Ansible output wraps it, which
+  breaks the link when copied
+- The token never appears in the output (`no_log`)
+
+Open the link in a browser to log in to the UI as an admin, then set up permanent access
+with a browser certificate. The link is meant for initial setup only; permanent access
+will move to OIDC (Phase 5).
+
+This playbook is not idempotent by design: every run revokes the previous token and issues
+a new one. That is why it is kept separate from `site.yml`.
 
 ## Configuration
 
