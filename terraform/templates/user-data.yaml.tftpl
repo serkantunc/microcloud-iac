@@ -1,7 +1,12 @@
 #cloud-config
 hostname: ${hostname}
 fqdn: ${hostname}.${domain}
-manage_etc_hosts: true
+manage_etc_hosts: false
+write_files:
+  - path: /etc/hosts
+    append: true
+    content: |
+      ${ip} ${hostname}.${domain} ${hostname}
 timezone: ${timezone}
 
 users:

@@ -1,0 +1,36 @@
+- name: Add cluster members to /etc/hosts
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} MicroCloud cluster members"
+    block: |
+      {% for host in groups['microcloud'] %}
+      {{ hostvars[host].ansible_host }} {{ host }}.{{ node_domain }} {{ host }}
+      {% endfor %}
+
+- name: Install MicroCloud snaps
+  ansible.builtin.command:
+    cmd: "snap install {{ item.name }} --channel={{ item.channel }} --cohort=+"
+    creates: "/snap/bin/{{ item.name }}"
+  loop: "{{ microcloud_snaps }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.channel }})"
+
+- name: List installed MicroCloud snaps
+  ansible.builtin.command:
+    cmd: "snap list {{ microcloud_snaps | map(attribute='name') | join(' ') }}"
+  register: microcloud_snap_list
+  changed_when: false
+
+- name: Find snaps that are not held yet
+  ansible.builtin.set_fact:
+    microcloud_unheld_snaps: >-
+      {{ microcloud_snap_list.stdout_lines[1:]
+         | reject('search', 'held')
+         | map('split')
+         | map('first')
+         | list }}
+
+- name: Hold automatic refreshes of MicroCloud snaps
+  ansible.builtin.command:
+    cmd: "snap refresh --hold {{ microcloud_unheld_snaps | join(' ') }}"
+  when: microcloud_unheld_snaps | length > 0

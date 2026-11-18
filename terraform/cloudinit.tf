@@ -11,6 +11,7 @@ resource "libvirt_cloudinit_disk" "seed" {
   user_data = templatefile("${path.module}/templates/user-data.yaml.tftpl", {
     hostname         = each.key
     domain           = var.domain
+    ip               = each.value.ip
     timezone         = var.timezone
     user             = var.vm_user
     ssh_public_key   = local.ssh_public_key

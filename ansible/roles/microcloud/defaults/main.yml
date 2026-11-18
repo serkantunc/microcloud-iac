@@ -1,0 +1,9 @@
+microcloud_snaps:
+  - name: lxd
+    channel: "6/stable"
+  - name: microceph
+    channel: "tentacle/stable"
+  - name: microovn
+    channel: "26.03/stable"
+  - name: microcloud
+    channel: "3/stable"
