@@ -58,3 +58,16 @@ resource "libvirt_volume" "ceph_disk" {
     format = { type = "qcow2" }
   }
 }
+
+resource "libvirt_volume" "local_disk" {
+  for_each = var.nodes
+
+  name          = "${each.key}-local.qcow2"
+  pool          = libvirt_pool.microcloud.name
+  capacity      = var.local_disk_gib
+  capacity_unit = "GiB"
+
+  target = {
+    format = { type = "qcow2" }
+  }
+}

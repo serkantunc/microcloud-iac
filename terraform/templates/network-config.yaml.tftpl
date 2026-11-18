@@ -21,3 +21,13 @@ ethernets:
     dhcp6: false
     accept-ra: false
     link-local: []
+  ceph:
+    match:
+      macaddress: "${mac_ceph}"
+    set-name: ceph
+    dhcp4: false
+    dhcp6: false
+    accept-ra: false
+    link-local: []
+    addresses:
+      - ${ceph_ip}/${ceph_prefix}

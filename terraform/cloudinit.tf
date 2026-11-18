@@ -10,6 +10,7 @@ resource "libvirt_cloudinit_disk" "seed" {
 
   user_data = templatefile("${path.module}/templates/user-data.yaml.tftpl", {
     hostname         = each.key
+    domain           = var.domain
     timezone         = var.timezone
     user             = var.vm_user
     ssh_public_key   = local.ssh_public_key
@@ -19,6 +20,9 @@ resource "libvirt_cloudinit_disk" "seed" {
   network_config = templatefile("${path.module}/templates/network-config.yaml.tftpl", {
     mac_mgmt    = each.value.mac_mgmt
     mac_uplink  = each.value.mac_uplink
+    mac_ceph    = each.value.mac_ceph
+    ceph_ip     = each.value.ceph_ip
+    ceph_prefix = split("/", var.ceph_network_cidr)[1]
     ip          = each.value.ip
     prefix      = var.network_prefix
     gateway     = var.gateway

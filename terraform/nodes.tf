@@ -45,6 +45,14 @@ resource "libvirt_domain" "node" {
         serial = "${each.key}-ceph"
       },
       {
+        source = {
+          file = { file = libvirt_volume.local_disk[each.key].path }
+        }
+        driver = { name = "qemu", type = "qcow2" }
+        target = { dev = "vdc", bus = "virtio" }
+        serial = "${each.key}-local"
+      },
+      {
         device = "cdrom"
         source = {
           file = { file = libvirt_volume.seed[each.key].path }
@@ -63,6 +71,11 @@ resource "libvirt_domain" "node" {
         mac    = { address = each.value.mac_uplink }
         model  = { type = "virtio" }
         source = { bridge = { bridge = var.bridge_name } }
+      },
+      {
+        mac    = { address = each.value.mac_ceph }
+        model  = { type = "virtio" }
+        source = { network = { network = libvirt_network.ceph.name } }
       },
     ]
 

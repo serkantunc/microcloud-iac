@@ -19,6 +19,11 @@ variable "nodes" {
     condition     = alltrue([for n in values(var.nodes) : tonumber(split(".", n.ip)[3]) < 100])
     error_message = "The last octet of each node IP must be below 100; it is reused in the node MAC addresses."
   }
+
+  validation {
+    condition     = length(distinct([for n in values(var.nodes) : n.ip])) == length(var.nodes)
+    error_message = "Node IPs must be unique; MAC addresses are derived from them."
+  }
 }
 
 variable "node_vcpu" {
@@ -41,6 +46,11 @@ variable "ceph_disk_gib" {
   default = 60
 }
 
+variable "local_disk_gib" {
+  type    = number
+  default = 30
+}
+
 variable "pool_name" {
   type    = string
   default = "microcloud"
@@ -61,6 +71,18 @@ variable "bridge_name" {
   description = "Host bridge the VMs attach to"
   type        = string
   default     = "br-mc"
+}
+
+variable "ceph_network_cidr" {
+  description = "Isolated network for Ceph replication and heartbeat traffic"
+  type        = string
+  default     = "10.10.10.0/24"
+}
+
+variable "domain" {
+  description = "DNS domain for node FQDNs"
+  type        = string
+  default     = "home.arpa"
 }
 
 variable "network_prefix" {
