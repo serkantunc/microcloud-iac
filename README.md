@@ -11,7 +11,7 @@ MicroOVN 26.03 on Ubuntu 26.04 LTS.
 - **Terraform** (libvirt provider 0.9.x) provisions storage, cloud-init seeds and VMs
 - **Ansible** installs and bootstraps MicroCloud (LXD + MicroCeph + MicroOVN) from a preseed file
 - **Validation** checks the cluster after deployment and writes a JSON report
-- *(planned)* an **AI agent** that runs the deployment and interprets failures
+- An **AI agent** (local LLM via Ollama) reads the validation report and the cluster state and explains failures, read-only
 
 ## Architecture
 
@@ -201,6 +201,86 @@ discovery with `initiator`. With `initiator_address`, every system needs an `add
 cloud-init only sets hostname, user, SSH key and networking, so nodes come up even
 without internet access. Packages and MicroCloud are handled by Ansible.
 
+## AI agent
+
+`agent/agent.py` is a troubleshooting assistant that runs on the controller and uses a
+local model through Ollama. It reads the validation report and queries the cluster, then
+explains what is wrong and what the operator should do. It cannot change anything.
+
+```bash
+ansible-playbook ansible/validate.yml
+python3 agent/agent.py
+python3 agent/agent.py "Ceph neden HEALTH_WARN?"
+AGENT_MODEL=qwen2.5:7b python3 agent/agent.py -v
+```
+
+Each `[tool]` line on stderr shows a call the model made; `-v` also prints the results.
+`get_vm_state` runs `virsh` without `sudo`, so the user needs to be in the `libvirt` group.
+
+### Design
+
+- **Fixed tools, no shell.** The model can only pick from eight tools
+  (`agent/tools.py`). Each runs one fixed read-only command: `lxc cluster list`,
+  `ceph status`, `ceph osd tree`, `microcloud status` or `lxc network list` on a node over
+  SSH, `virsh domstate` on the controller, or it reads `validate/reports/latest.json`. The only argument the model controls is a node
+  name, checked against the inventory. Unknown tools are rejected.
+- **Tool output is data.** Instance names, log lines and error messages come from the
+  cluster and could carry text written to steer the model. The system prompt tells the
+  model to treat tool results as data and to report instructions found in them as
+  suspicious.
+- **The report always comes first, and answers are checked.** The agent reads the
+  validation report itself before the model's first turn. Each failed or warning check
+  maps to the tools that explain it (`CHECK_TOOLS` in `agent/agent.py`). If the model
+  answers before calling them, the agent sends it back with the checks still open, up to
+  twice. In testing, small local models stopped after one tool, misread Ceph quorum or
+  told the operator to run the tools; this is enforced in code, not only in the prompt.
+- **Tools are not commands.** If the next steps tell the operator to run a tool name
+  (for example `check_node_ssh micro1` in a code block), the answer is sent back with a
+  request for real shell commands.
+- **Same failover as the playbooks.** Queries go to the first node that answers over SSH.
+- **Small context.** Tool results are trimmed to the fields that matter and capped at
+  4000 characters, so the agent fits a 6 GB GPU with an 8K context.
+- **No dependencies.** Standard library only; node addresses come from the Ansible
+  inventory via `ansible-inventory`.
+
+| Setting | Default |
+|---------|---------|
+| `--model` / `AGENT_MODEL` | `qwen3:4b` |
+| `--ollama` / `OLLAMA_HOST` | `http://localhost:11434` |
+| `--num-ctx` | `8192` |
+| `--max-steps` | `10` |
+
+### Model comparison
+
+Scenario: `micro1` shut down with `virsh shutdown`, then `validate.yml` and the agent.
+Hardware: laptop RTX 3050, 6 GB VRAM, 8K context. Each model was asked the default
+question and "Ceph neden HEALTH_WARN? Türkçe anlat." (in Turkish).
+
+First version (prompt only, the model decides which tools to call):
+
+| | `qwen2.5:7b` | `qwen3:4b` |
+|---|---|---|
+| Tools called | 1–2 | 1–5 |
+| Root cause | partly; suggested restarting `ceph-osd@3`, a unit MicroCeph does not have | wrong for the Ceph question ("micro3 monitor down"); right for the default question |
+| Told the operator to run tools | yes | no |
+
+Current version (report read by the agent, per-check verification, facts in the prompt):
+
+| | `qwen2.5:7b` | `qwen3:4b` |
+|---|---|---|
+| Tools called | 5 | 5–6 |
+| Sent back for unverified checks | 1–2 times | 0–1 times |
+| Root cause: `micro1` VM shut off | yes | yes |
+| First step: `virsh start micro1` | yes | yes |
+| Answered in the question's language | no, answered a Turkish question in Chinese | yes |
+| Told the operator to run tools | in 2 of 3 runs | no |
+| Contradicted its own findings | yes, "two down OSDs" in the summary, one in the findings | no |
+| Same answer on a repeated run | no | yes (temperature 0) |
+| Model size | 4.7 GB | 2.5 GB |
+
+`qwen3:4b` is the default: smaller and more reliable here. The bigger gain came from
+the code around the model, not from the model.
+
 ## Continuous integration
 
 Every push and pull request runs static checks on GitHub-hosted runners
@@ -210,6 +290,7 @@ Every push and pull request runs static checks on GitHub-hosted runners
 |-----|-------|
 | `terraform` | `terraform fmt`, `terraform validate`, `tflint` |
 | `ansible` | `ansible-lint` (production profile) |
+| `python` | `ruff check`, `ruff format` (agent) |
 | `security` | `gitleaks` (full git history), `checkov` (Terraform, Ansible, workflow) |
 
 `validate.yml` checks the running cluster; CI checks the code.
@@ -229,7 +310,8 @@ traffic on its own network.
   - [x] LXD UI access link via Ansible
 - [ ] Phase 3 – Validation and an AI agent that runs and checks the deployment (local LLM via Ollama)
   - [x] Validation playbook with a JSON report
-  - [ ] AI agent that reads the report and the cluster state
+  - [x] Read-only AI agent that reads the report and the cluster state
+  - [ ] Compare local models on the same failure scenarios
 - [ ] Phase 4 – Observability: Juju, MicroK8s and COS Lite on a separate host, `microcloud` charm for metrics
 - [ ] Phase 5 – MicroCloud Cluster Manager with an external OIDC provider
 - [ ] Extras – MicroK8s as a workload on MicroCloud, decommission playbook, NAT network mode,

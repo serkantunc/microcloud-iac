@@ -25,3 +25,6 @@ id_*
 .vscode/
 *.swp
 provider-schema.json
+
+# Python
+__pycache__/
