@@ -12,6 +12,9 @@ terraform.tfvars
 ansible/inventory/hosts.yml
 ansible/.secrets/
 
+# Validation reports
+validate/reports/
+
 # Secrets / local
 .env
 *.pem

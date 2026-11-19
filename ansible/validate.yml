@@ -1,0 +1,285 @@
+---
+- name: Select a reachable cluster member
+  hosts: microcloud
+  gather_facts: false
+
+  tasks:
+    - name: Check SSH reachability
+      ansible.builtin.ping:
+      register: node_ping
+      ignore_unreachable: true
+      ignore_errors: true
+
+    - name: Record reachability
+      ansible.builtin.set_fact:
+        node_reachable: "{{ node_ping is succeeded and node_ping.unreachable is not defined }}"
+
+    - name: Pick the first reachable member
+      vars:
+        reachable: "{{ groups['microcloud'] | map('extract', hostvars) | selectattr('node_reachable', 'defined') | selectattr('node_reachable') | map(attribute='inventory_hostname') | list }}"
+      run_once: true
+      block:
+        - name: Fail if no member is reachable
+          ansible.builtin.fail:
+            msg: "No cluster member is reachable over SSH"
+          when: reachable | length == 0
+
+        - name: Add member to the validation target group
+          ansible.builtin.add_host:
+            name: "{{ reachable | first }}"
+            groups: validate_target
+            validate_unreachable: "{{ groups['microcloud'] | difference(reachable) }}"
+
+- name: Validate the MicroCloud deployment
+  hosts: validate_target
+  become: true
+  gather_facts: false
+
+  vars:
+    validate_image: "ubuntu:26.04"
+    validate_container: validate-c1
+    validate_vm: false
+    validate_vm_name: validate-vm1
+    validate_storage_pools: [local, remote, remote-fs]
+    validate_networks: [UPLINK, default]
+    validate_report_dir: "{{ (playbook_dir ~ '/../validate/reports') | realpath }}"
+    validation_results:
+      - check: nodes_reachable
+        status: "{{ 'pass' if validate_unreachable | length == 0 else 'fail' }}"
+        detail: "validated from {{ inventory_hostname }}, unreachable: {{ validate_unreachable | join(',') or 'none' }}"
+
+  tasks:
+    - name: Read cluster members
+      ansible.builtin.command: lxc cluster list -f json
+      register: cluster_list
+      changed_when: false
+      failed_when: false
+
+    - name: Check cluster members
+      vars:
+        members: "{{ cluster_list.stdout | default('[]', true) | from_json }}"
+        offline: "{{ members | rejectattr('status', 'equalto', 'Online') | map(attribute='server_name') | list }}"
+      ansible.builtin.set_fact:
+        validation_results: "{{ validation_results + [{
+          'check': 'cluster_members',
+          'status': 'pass' if (cluster_list.rc == 0 and members | length == groups['microcloud'] | length and offline | length == 0) else 'fail',
+          'detail': (members | length | string) ~ ' members, offline: ' ~ (offline | join(',') or 'none') if cluster_list.rc == 0 else cluster_list.stderr
+        }] }}"
+
+    - name: Read Ceph status
+      ansible.builtin.command: microceph.ceph status -f json
+      register: ceph_status
+      changed_when: false
+      failed_when: false
+
+    - name: Check Ceph health and OSDs
+      vars:
+        ceph: "{{ ceph_status.stdout | default('{}', true) | from_json }}"
+        health: "{{ ceph.health.status | default('unknown') }}"
+        osds: "{{ ceph.osdmap.num_osds | default(0) | int }}"
+        osds_up: "{{ ceph.osdmap.num_up_osds | default(0) | int }}"
+        osds_in: "{{ ceph.osdmap.num_in_osds | default(0) | int }}"
+      ansible.builtin.set_fact:
+        validation_results: "{{ validation_results + [
+          {'check': 'ceph_health', 'status': 'pass' if health == 'HEALTH_OK' else 'fail', 'detail': health},
+          {'check': 'ceph_osds',
+           'status': 'pass' if (osds | int == groups['microcloud'] | length and osds_up == osds and osds_in == osds) else 'fail',
+           'detail': osds ~ ' total, ' ~ osds_up ~ ' up, ' ~ osds_in ~ ' in'}
+        ] }}"
+
+    - name: Read Ceph cluster network
+      ansible.builtin.command: microceph.ceph config get osd cluster_network
+      register: ceph_cluster_network
+      changed_when: false
+      failed_when: false
+
+    - name: Check Ceph cluster network
+      ansible.builtin.set_fact:
+        validation_results: "{{ validation_results + [{
+          'check': 'ceph_cluster_network',
+          'status': 'pass' if ceph_cluster_network.stdout | trim == ceph_network_cidr else 'fail',
+          'detail': 'expected ' ~ ceph_network_cidr ~ ', got ' ~ (ceph_cluster_network.stdout | trim or 'nothing')
+        }] }}"
+
+    - name: Read storage pools
+      ansible.builtin.command: lxc storage list -f json
+      register: storage_list
+      changed_when: false
+      failed_when: false
+
+    - name: Check storage pools
+      vars:
+        pools: "{{ storage_list.stdout | default('[]', true) | from_json }}"
+        missing: "{{ validate_storage_pools | difference(pools | map(attribute='name') | list) }}"
+        not_created: "{{ pools | selectattr('name', 'in', validate_storage_pools) | rejectattr('status', 'equalto', 'Created') | map(attribute='name') | list }}"
+      ansible.builtin.set_fact:
+        validation_results: "{{ validation_results + [{
+          'check': 'storage_pools',
+          'status': 'pass' if (missing | length == 0 and not_created | length == 0) else 'fail',
+          'detail': 'missing: ' ~ (missing | join(',') or 'none') ~ ', not created: ' ~ (not_created | join(',') or 'none')
+        }] }}"
+
+    - name: Read networks
+      ansible.builtin.command: lxc network list -f json
+      register: network_list
+      changed_when: false
+      failed_when: false
+
+    - name: Check networks
+      vars:
+        networks: "{{ network_list.stdout | default('[]', true) | from_json }}"
+        missing: "{{ validate_networks | difference(networks | map(attribute='name') | list) }}"
+      ansible.builtin.set_fact:
+        validation_results: "{{ validation_results + [{
+          'check': 'networks',
+          'status': 'pass' if missing | length == 0 else 'fail',
+          'detail': 'missing: ' ~ (missing | join(',') or 'none')
+        }] }}"
+
+    - name: Read OVN router uplink address
+      ansible.builtin.command: lxc network get default volatile.network.ipv4.address
+      register: ovn_router_ip
+      changed_when: false
+      failed_when: false
+
+    - name: Ping OVN router from the controller
+      ansible.builtin.command: "ping -c 3 -W 2 {{ ovn_router_ip.stdout | trim }}"
+      register: ovn_router_ping
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      when: ovn_router_ip.stdout | trim | length > 0
+
+    - name: Check OVN router reachability
+      ansible.builtin.set_fact:
+        validation_results: "{{ validation_results + [{
+          'check': 'ovn_router_reachable',
+          'status': 'pass' if (ovn_router_ping.rc | default(1)) == 0 else 'fail',
+          'detail': (ovn_router_ip.stdout | trim or 'no router address') ~ ' from controller'
+        }] }}"
+
+    - name: Read UPLINK routes
+      ansible.builtin.command: lxc network get UPLINK ipv4.routes
+      register: uplink_routes
+      changed_when: false
+      failed_when: false
+
+    - name: Check UPLINK routes for network forwards
+      ansible.builtin.set_fact:
+        validation_results: "{{ validation_results + [{
+          'check': 'uplink_routes',
+          'status': 'pass' if uplink_routes.stdout | trim | length > 0 else 'warn',
+          'detail': uplink_routes.stdout | trim if uplink_routes.stdout | trim | length > 0 else 'ipv4.routes not set, network forwards and load balancers will be rejected'
+        }] }}"
+
+    - name: Functional test on a container
+      block:
+        - name: Launch test container on Ceph
+          ansible.builtin.command: "lxc launch {{ validate_image }} {{ validate_container }} --storage remote"
+          register: container_launch
+          failed_when: false
+
+        - name: Wait for container IPv4 address
+          ansible.builtin.command: "lxc exec {{ validate_container }} -- ip -4 -o addr show dev eth0 scope global"
+          register: container_ip
+          until: container_ip.stdout | length > 0
+          retries: 30
+          delay: 2
+          changed_when: false
+          failed_when: false
+          when: container_launch.rc == 0
+
+        - name: Test outbound connectivity from container
+          ansible.builtin.command: "lxc exec {{ validate_container }} -- ping -c 3 -W 2 1.1.1.1"
+          register: container_ping
+          changed_when: false
+          failed_when: false
+          when: container_launch.rc == 0
+
+        - name: Test DNS resolution from container
+          ansible.builtin.command: "lxc exec {{ validate_container }} -- getent hosts ubuntu.com"
+          register: container_dns
+          changed_when: false
+          failed_when: false
+          when: container_launch.rc == 0
+
+        - name: Record container results
+          ansible.builtin.set_fact:
+            validation_results: "{{ validation_results + [
+              {'check': 'container_launch', 'status': 'pass' if container_launch.rc == 0 else 'fail',
+               'detail': 'on pool remote' if container_launch.rc == 0 else container_launch.stderr | default('')},
+              {'check': 'container_ipv4', 'status': 'pass' if (container_ip.stdout | default('')) | length > 0 else 'fail',
+               'detail': (container_ip.stdout | default('') | regex_search('inet (\\S+)', '\\1') | default(['none'], true) | first)},
+              {'check': 'container_egress', 'status': 'pass' if (container_ping.rc | default(1)) == 0 else 'fail', 'detail': 'ping 1.1.1.1'},
+              {'check': 'container_dns', 'status': 'pass' if (container_dns.rc | default(1)) == 0 else 'fail', 'detail': 'resolve ubuntu.com'}
+            ] }}"
+      always:
+        - name: Remove test container
+          ansible.builtin.command: "lxc delete --force {{ validate_container }}"
+          changed_when: false
+          failed_when: false
+
+    - name: Functional test on a virtual machine
+      when: validate_vm | bool
+      block:
+        - name: Launch test VM on Ceph
+          ansible.builtin.command: "lxc launch {{ validate_image }} {{ validate_vm_name }} --vm --storage remote -c limits.memory=1GiB"
+          register: vm_launch
+          failed_when: false
+
+        - name: Wait for VM agent
+          ansible.builtin.command: "lxc exec {{ validate_vm_name }} -- true"
+          register: vm_agent
+          until: vm_agent.rc == 0
+          retries: 60
+          delay: 5
+          changed_when: false
+          failed_when: false
+          when: vm_launch.rc == 0
+
+        - name: Record VM results
+          ansible.builtin.set_fact:
+            validation_results: "{{ validation_results + [{
+              'check': 'vm_boot',
+              'status': 'pass' if (vm_agent.rc | default(1)) == 0 else 'fail',
+              'detail': 'lxd-agent responded' if (vm_agent.rc | default(1)) == 0 else (vm_launch.stderr | default('lxd-agent did not respond'))
+            }] }}"
+      always:
+        - name: Remove test VM
+          ansible.builtin.command: "lxc delete --force {{ validate_vm_name }}"
+          changed_when: false
+          failed_when: false
+
+    - name: Write validation report
+      vars:
+        failed: "{{ validation_results | selectattr('status', 'equalto', 'fail') | list }}"
+        report:
+          timestamp: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+          cluster: "{{ groups['microcloud'] }}"
+          result: "{{ 'fail' if failed | length > 0 else 'pass' }}"
+          checks: "{{ validation_results }}"
+      delegate_to: localhost
+      become: false
+      block:
+        - name: Create report directory
+          ansible.builtin.file:
+            path: "{{ validate_report_dir }}"
+            state: directory
+            mode: "0755"
+
+        - name: Save report
+          ansible.builtin.copy:
+            content: "{{ report | to_nice_json }}\n"
+            dest: "{{ validate_report_dir }}/latest.json"
+            mode: "0644"
+
+    - name: Show summary
+      ansible.builtin.debug:
+        msg: "{{ validation_results | map(attribute='status') | map('upper') | zip(validation_results | map(attribute='check'), validation_results | map(attribute='detail')) | map('join', '  ') | list }}"
+
+    - name: Fail if any check failed
+      ansible.builtin.assert:
+        that: validation_results | selectattr('status', 'equalto', 'fail') | list | length == 0
+        fail_msg: "Validation failed, see {{ validate_report_dir }}/latest.json"
+        success_msg: "All checks passed"

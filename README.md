@@ -8,7 +8,7 @@ MicroOVN 26.03 on Ubuntu 26.04 LTS.
 
 - **Terraform** (libvirt provider 0.9.x) provisions storage, cloud-init seeds and VMs
 - **Ansible** installs and bootstraps MicroCloud (LXD + MicroCeph + MicroOVN) from a preseed file
-- **Validation** *(Phase 3)* checks the cluster after deployment
+- **Validation** checks the cluster after deployment and writes a JSON report
 - *(planned)* an **AI agent** that runs the deployment and interprets failures
 
 ## Architecture
@@ -60,6 +60,7 @@ ansible all -m wait_for_connection
 ansible-playbook site.yml
 ansible-playbook ui-link.yml
 cat .secrets/ui-link.txt
+ansible-playbook validate.yml
 ```
 
 `site.yml` ends with `microcloud status`. From an empty host to a `HEALTHY` three-node
@@ -97,6 +98,29 @@ will move to OIDC (Phase 5).
 This playbook is not idempotent by design: every run revokes the previous token and issues
 a new one. That is why it is kept separate from `site.yml`.
 
+#### `validate.yml`: check the cluster
+
+Runs on the first cluster member that answers over SSH, so it still works when a node is
+down. It does not stop at the first failure: every check runs, then the playbook fails if
+any check failed.
+
+| Check | Passes when |
+|-------|-------------|
+| `nodes_reachable` | every node answers over SSH |
+| `cluster_members` | all members are `Online` |
+| `ceph_health` | Ceph reports `HEALTH_OK` |
+| `ceph_osds` | one OSD per node, all up and in |
+| `ceph_cluster_network` | OSD replication uses the dedicated Ceph network |
+| `storage_pools` | `local`, `remote` and `remote-fs` exist and are created |
+| `networks` | `UPLINK` and `default` exist |
+| `ovn_router_reachable` | the OVN router's uplink address answers ping from the controller |
+| `uplink_routes` | `ipv4.routes` is set on `UPLINK`; warning only, needed for network forwards and load balancers |
+| `container_*` | a container on Ceph gets an address, reaches the internet and resolves DNS |
+| `vm_boot` | a VM on Ceph boots and its agent responds (`-e validate_vm=true`) |
+
+Test instances are always deleted, even when a step fails. Results are written to
+`validate/reports/latest.json` (not committed).
+
 ## Configuration
 
 All settings are variables in `terraform/variables.tf`. Override them in
@@ -123,6 +147,21 @@ login on the VNC console, as a fallback when networking is broken.
 All three nodes run on one physical host, so this lab provides **node-level HA**
 (stop one VM: dqlite keeps quorum, Ceph runs degraded, workloads keep running),
 **not host-level HA**. A host failure takes down the whole cluster.
+
+`validate.yml` shows this. With `micro1` shut down:
+
+```
+FAIL  nodes_reachable  validated from micro2, unreachable: micro1
+FAIL  cluster_members  3 members, offline: micro1
+FAIL  ceph_health  HEALTH_WARN
+FAIL  ceph_osds  3 total, 2 up, 3 in
+PASS  ovn_router_reachable  192.168.1.70 from controller
+PASS  container_launch  on pool remote
+PASS  container_egress  ping 1.1.1.1
+```
+
+The cluster is reported as degraded, and new workloads still start on Ceph and reach the
+network.
 
 ## Known issues
 
@@ -174,6 +213,8 @@ traffic on its own network.
 - [x] Phase 2 – Ansible: snapd check, MicroCloud 3.4 via preseed
   - [x] LXD UI access link via Ansible
 - [ ] Phase 3 – Validation and an AI agent that runs and checks the deployment (local LLM via Ollama)
+  - [x] Validation playbook with a JSON report
+  - [ ] AI agent that reads the report and the cluster state
 - [ ] Phase 4 – Observability: Juju, MicroK8s and COS Lite on a separate host, `microcloud` charm for metrics
 - [ ] Phase 5 – MicroCloud Cluster Manager with an external OIDC provider
 - [ ] Extras – MicroK8s as a workload on MicroCloud, decommission playbook, NAT network mode,
