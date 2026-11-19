@@ -1,5 +1,7 @@
 # microcloud-iac
 
+[![lint](https://github.com/serkantunc/microcloud-iac/actions/workflows/lint.yml/badge.svg)](https://github.com/serkantunc/microcloud-iac/actions/workflows/lint.yml)
+
 Infrastructure-as-Code for a **3-node Canonical MicroCloud** lab on KVM/libvirt,
 with **MicroK8s** planned as a workload on top.
 
@@ -84,7 +86,7 @@ Running it again reports `changed=0`.
 
 #### `ui-link.yml`: initial LXD UI access
 
-- Runs `lxd init --ui-initial-access-link` on the first node, which creates the
+- Runs `lxd init --ui-initial-access-link` on the first reachable member, which creates the
   `ui-admin-initial` identity and issues a bearer token valid for 24 hours
 - Writes the link to `ansible/.secrets/ui-link.txt` on the controller (mode 0600, not
   committed) instead of printing it: the token is long and Ansible output wraps it, which
@@ -100,8 +102,8 @@ a new one. That is why it is kept separate from `site.yml`.
 
 #### `validate.yml`: check the cluster
 
-Runs on the first cluster member that answers over SSH, so it still works when a node is
-down. It does not stop at the first failure: every check runs, then the playbook fails if
+Runs on the first cluster member that answers over SSH (`select-target.yml`, shared with
+`ui-link.yml`), so it still works when a node is down. It does not stop at the first failure: every check runs, then the playbook fails if
 any check failed.
 
 | Check | Passes when |
@@ -188,7 +190,7 @@ manages the cluster members block.
 **Phased updates leave nodes on different package versions.**
 Ubuntu rolls some updates out to a percentage of machines, chosen by machine ID. Nodes built
 from the same image at the same time ended up with different snapd versions. The `common`
-role sets `APT::Get::Always-Include-Phased-Updates` (variable `apt_include_phased_updates`).
+role sets `APT::Get::Always-Include-Phased-Updates` (variable `common_apt_include_phased_updates`).
 
 **Preseed: `initiator_address` and `lookup_subnet` are mutually exclusive.**
 The preseed reference describes `lookup_subnet` as required, but it only applies to multicast
@@ -198,6 +200,19 @@ discovery with `initiator`. With `initiator_address`, every system needs an `add
 **cloud-init is kept minimal.**
 cloud-init only sets hostname, user, SSH key and networking, so nodes come up even
 without internet access. Packages and MicroCloud are handled by Ansible.
+
+## Continuous integration
+
+Every push and pull request runs static checks on GitHub-hosted runners
+(`.github/workflows/lint.yml`). Nothing connects to libvirt or to the cluster.
+
+| Job | Tools |
+|-----|-------|
+| `terraform` | `terraform fmt`, `terraform validate`, `tflint` |
+| `ansible` | `ansible-lint` (production profile) |
+| `security` | `gitleaks` (full git history), `checkov` (Terraform, Ansible, workflow) |
+
+`validate.yml` checks the running cluster; CI checks the code.
 
 ## Related work
 

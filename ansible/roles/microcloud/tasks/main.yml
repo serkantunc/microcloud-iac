@@ -33,6 +33,7 @@
 - name: Hold automatic refreshes of MicroCloud snaps
   ansible.builtin.command:
     cmd: "snap refresh --hold {{ microcloud_unheld_snaps | join(' ') }}"
+  changed_when: true
   when: microcloud_unheld_snaps | length > 0
 
 - name: Render MicroCloud preseed file
@@ -59,6 +60,7 @@
   ansible.builtin.shell: "microcloud preseed < {{ microcloud_preseed_path }}"
   async: 1800
   poll: 15
+  changed_when: true
   when: microcloud_membership.rc != 0
 
 - name: Read MicroCloud status

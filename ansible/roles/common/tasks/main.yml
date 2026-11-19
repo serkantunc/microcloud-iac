@@ -8,13 +8,13 @@
     owner: root
     group: root
     mode: "0644"
-  when: apt_include_phased_updates
+  when: common_apt_include_phased_updates
 
 - name: Remove phased updates override
   ansible.builtin.file:
     path: /etc/apt/apt.conf.d/99-include-phased-updates
     state: absent
-  when: not apt_include_phased_updates
+  when: not common_apt_include_phased_updates
 
 - name: Update apt cache and upgrade packages
   ansible.builtin.apt:
@@ -25,30 +25,30 @@
 - name: Check whether a reboot is required
   ansible.builtin.stat:
     path: /var/run/reboot-required
-  register: reboot_required
+  register: common_reboot_required
 
 - name: Reboot if required
   ansible.builtin.reboot:
-  when: reboot_required.stat.exists
+  when: common_reboot_required.stat.exists
 
 - name: Read snapd version
   ansible.builtin.command: snap version
-  register: snap_version_output
+  register: common_snap_version_output
   changed_when: false
 
 - name: Extract snapd version
   ansible.builtin.set_fact:
-    snapd_version: >-
-      {{ snap_version_output.stdout
+    common_snapd_version: >-
+      {{ common_snap_version_output.stdout
          | regex_search('^snapd\s+([0-9.]+)', '\1', multiline=True)
          | first }}
 
 - name: Ensure snapd is recent enough for MicroCloud 3.4 (core26 base)
   ansible.builtin.assert:
     that:
-      - snapd_version is version(snapd_min_version, '>=')
-    fail_msg: "snapd {{ snapd_version }} is older than the required {{ snapd_min_version }}"
-    success_msg: "snapd {{ snapd_version }} meets the minimum of {{ snapd_min_version }}"
+      - common_snapd_version is version(common_snapd_min_version, '>=')
+    fail_msg: "snapd {{ common_snapd_version }} is older than the required {{ common_snapd_min_version }}"
+    success_msg: "snapd {{ common_snapd_version }} meets the minimum of {{ common_snapd_min_version }}"
 
 # Workaround for https://bugs.launchpad.net/snapd/+bug/2104066 (snap installs can fail
 # while snapd enters standby on a system with no snaps). Fixed in snapd 2.69, so this
@@ -60,7 +60,7 @@
     owner: root
     group: root
     mode: "0755"
-  when: snapd_version is version(snapd_standby_fix_version, '<')
+  when: common_snapd_version is version(common_snapd_standby_fix_version, '<')
 
 - name: Configure snapd standby wait
   ansible.builtin.copy:
@@ -71,5 +71,5 @@
     owner: root
     group: root
     mode: "0644"
-  when: snapd_version is version(snapd_standby_fix_version, '<')
+  when: common_snapd_version is version(common_snapd_standby_fix_version, '<')
   notify: Restart snapd

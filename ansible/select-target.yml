@@ -1,0 +1,40 @@
+---
+- name: Check which cluster members are reachable
+  hosts: microcloud
+  gather_facts: false
+
+  tasks:
+    - name: Check SSH reachability
+      ansible.builtin.ping:
+      register: node_ping
+      ignore_unreachable: true
+      ignore_errors: true
+
+    - name: Record reachability
+      ansible.builtin.set_fact:
+        node_reachable: "{{ node_ping is succeeded and node_ping.unreachable is not defined }}"
+
+- name: Pick the first reachable member
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    reachable: >-
+      {{ groups['microcloud']
+         | map('extract', hostvars)
+         | selectattr('node_reachable', 'defined')
+         | selectattr('node_reachable')
+         | map(attribute='inventory_hostname')
+         | list }}
+
+  tasks:
+    - name: Fail if no member is reachable
+      ansible.builtin.fail:
+        msg: "No cluster member is reachable over SSH"
+      when: reachable | length == 0
+
+    - name: Add first reachable member to the target group
+      ansible.builtin.add_host:
+        name: "{{ reachable | first }}"
+        groups: cluster_target
+        cluster_unreachable: "{{ groups['microcloud'] | difference(reachable) }}"

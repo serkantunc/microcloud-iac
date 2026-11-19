@@ -1,6 +1,9 @@
 ---
+- name: Select a reachable cluster member
+  ansible.builtin.import_playbook: select-target.yml
+
 - name: Issue an initial LXD UI access link
-  hosts: "{{ groups['microcloud'][0] }}"
+  hosts: cluster_target
   become: true
   gather_facts: false
 
@@ -11,6 +14,7 @@
     - name: Issue initial UI access token
       ansible.builtin.command: lxd init --ui-initial-access-link
       register: ui_link_result
+      changed_when: true
       no_log: true
 
     - name: Extract access link

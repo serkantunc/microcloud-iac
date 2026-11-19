@@ -1,0 +1,55 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: terraform fmt
+        run: docker run --rm -v "$PWD/terraform:/tf" -w /tf hashicorp/terraform:latest fmt -check -diff -recursive
+
+      - name: terraform init
+        run: docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/terraform:/tf" -w /tf hashicorp/terraform:latest init -backend=false -input=false
+
+      - name: terraform validate
+        run: docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/terraform:/tf" -w /tf hashicorp/terraform:latest validate
+
+      - name: tflint
+        run: docker run --rm -v "$PWD/terraform:/data" -w /data ghcr.io/terraform-linters/tflint:latest --format compact
+
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install ansible-lint
+        run: pipx install ansible-lint
+
+      - name: ansible-lint
+        working-directory: ansible
+        run: ansible-lint --profile production
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        run: docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest git /repo --redact --verbose
+
+      - name: Install checkov
+        run: pipx install checkov
+
+      - name: checkov
+        run: checkov -d . --framework terraform ansible github_actions secrets --compact --quiet --skip-download
