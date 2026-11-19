@@ -308,10 +308,10 @@ traffic on its own network.
 - [x] Phase 1 – Terraform: storage, cloud-init, VMs
 - [x] Phase 2 – Ansible: snapd check, MicroCloud 3.4 via preseed
   - [x] LXD UI access link via Ansible
-- [ ] Phase 3 – Validation and an AI agent that runs and checks the deployment (local LLM via Ollama)
+- [x] Phase 3 – Validation and a read-only AI agent that explains failures (local LLM via Ollama)
   - [x] Validation playbook with a JSON report
   - [x] Read-only AI agent that reads the report and the cluster state
-  - [ ] Compare local models on the same failure scenarios
+  - [x] Compare local models on the same failure scenarios
 - [ ] Phase 4 – Observability: Juju, MicroK8s and COS Lite on a separate host, `microcloud` charm for metrics
 - [ ] Phase 5 – MicroCloud Cluster Manager with an external OIDC provider
 - [ ] Extras – MicroK8s as a workload on MicroCloud, decommission playbook, NAT network mode,
