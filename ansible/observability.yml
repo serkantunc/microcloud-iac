@@ -1,0 +1,13 @@
+---
+- name: Prepare the observability VM
+  hosts: observability
+  become: true
+  roles:
+    - common
+    - microk8s
+
+- name: Set up the Juju controller and models
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - juju

@@ -1,0 +1,76 @@
+---
+- name: Check for the Juju client
+  ansible.builtin.command: juju version
+  register: juju_version
+  changed_when: false
+  failed_when: false
+
+- name: Fail if the Juju client is missing
+  ansible.builtin.fail:
+    msg: "Install the Juju client on the controller host first: sudo snap install juju --channel 3.6/stable"
+  when: juju_version.rc != 0
+
+- name: Check for the Juju controller
+  ansible.builtin.command: "juju show-controller {{ juju_controller }}"
+  register: juju_show_controller
+  changed_when: false
+  failed_when: false
+
+- name: Bootstrap the Juju controller on the observability VM
+  ansible.builtin.command: >-
+    juju bootstrap manual/{{ juju_obs_user }}@{{ juju_obs_address }} {{ juju_controller }}
+  when: juju_show_controller.rc != 0
+  changed_when: true
+  async: 1800
+  poll: 15
+
+- name: Check for the Kubernetes cloud on the controller
+  ansible.builtin.command: "juju show-cloud {{ juju_k8s_cloud }} --controller {{ juju_controller }}"
+  register: juju_show_cloud
+  changed_when: false
+  failed_when: false
+
+- name: Read the MicroK8s kubeconfig
+  ansible.builtin.command: microk8s config
+  register: juju_kubeconfig
+  delegate_to: "{{ juju_obs_host }}"
+  become: true
+  changed_when: false
+  no_log: true
+  when: juju_show_cloud.rc != 0
+
+- name: Add MicroK8s to the controller
+  ansible.builtin.command:
+    cmd: "juju add-k8s {{ juju_k8s_cloud }} --controller {{ juju_controller }} --client"
+    stdin: "{{ juju_kubeconfig.stdout }}"
+  when: juju_show_cloud.rc != 0
+  changed_when: true
+  no_log: true
+
+- name: Read existing models
+  ansible.builtin.command: "juju models --controller {{ juju_controller }} --format json"
+  register: juju_models
+  changed_when: false
+
+- name: Compute existing model names
+  ansible.builtin.set_fact:
+    juju_existing_models: "{{ (juju_models.stdout | from_json).models | map(attribute='short-name') | list }}"
+
+- name: Add Kubernetes models
+  ansible.builtin.command: "juju add-model {{ item }} {{ juju_k8s_cloud }} --controller {{ juju_controller }} --no-switch"
+  loop: "{{ juju_k8s_models | difference(juju_existing_models) }}"
+  changed_when: true
+
+- name: Add machine models
+  ansible.builtin.command: "juju add-model {{ item }} {{ juju_machine_cloud }} --controller {{ juju_controller }} --no-switch"
+  loop: "{{ juju_machine_models | difference(juju_existing_models) }}"
+  changed_when: true
+
+- name: Show models
+  ansible.builtin.command: "juju models --controller {{ juju_controller }}"
+  register: juju_models_table
+  changed_when: false
+
+- name: Print models
+  ansible.builtin.debug:
+    var: juju_models_table.stdout_lines

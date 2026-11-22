@@ -1,0 +1,12 @@
+---
+juju_controller: lab
+juju_k8s_cloud: obs-k8s
+juju_k8s_models:
+  - cluster-manager
+  - cos
+juju_machine_cloud: manual
+juju_machine_models:
+  - microcloud
+juju_obs_host: "{{ groups['observability'][0] }}"
+juju_obs_address: "{{ hostvars[juju_obs_host].ansible_host }}"
+juju_obs_user: "{{ hostvars[juju_obs_host].ansible_user }}"
