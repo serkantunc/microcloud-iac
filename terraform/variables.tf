@@ -101,9 +101,9 @@ variable "dns_servers" {
 }
 
 variable "ovn_ipv4_range" {
-  description = "Addresses on the uplink network that LXD assigns to OVN networks"
+  description = "Addresses on the uplink network that LXD assigns to OVN network routers; keep clear of metallb_range"
   type        = string
-  default     = "192.168.1.70-192.168.1.109"
+  default     = "192.168.1.70-192.168.1.79"
 }
 
 variable "vm_user" {
@@ -126,4 +126,64 @@ variable "vm_console_password" {
 variable "timezone" {
   type    = string
   default = "Etc/UTC"
+}
+
+variable "obs_libvirt_uri" {
+  description = "libvirt connection URI for the observability host"
+  type        = string
+  default     = "qemu:///system"
+}
+
+variable "obs_node" {
+  description = "Observability VM: Juju controller, MicroK8s, COS Lite and Cluster Manager"
+  type = object({
+    name = string
+    ip   = string
+  })
+  default = {
+    name = "obs1"
+    ip   = "192.168.1.69"
+  }
+
+  validation {
+    condition     = tonumber(split(".", var.obs_node.ip)[3]) < 100
+    error_message = "The last octet of the observability VM IP must be below 100; it is reused in its MAC address."
+  }
+}
+
+variable "obs_vcpu" {
+  type    = number
+  default = 4
+}
+
+variable "obs_memory_mib" {
+  type    = number
+  default = 14336
+}
+
+variable "obs_disk_gib" {
+  type    = number
+  default = 100
+}
+
+variable "obs_bridge_name" {
+  description = "Bridge on the observability host that connects the VM to the LAN"
+  type        = string
+  default     = "br-mc"
+}
+
+variable "obs_pool_name" {
+  type    = string
+  default = "observability"
+}
+
+variable "obs_pool_path" {
+  type    = string
+  default = "/var/lib/libvirt/observability"
+}
+
+variable "metallb_range" {
+  description = "LAN addresses MetalLB hands out to LoadBalancer services on the observability VM"
+  type        = string
+  default     = "192.168.1.96-192.168.1.99"
 }

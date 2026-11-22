@@ -16,3 +16,9 @@
 # node_memory_mib = 12288
 
 # vm_console_password = "change-me"
+
+# Observability VM on a second KVM host, reached over SSH
+# obs_libvirt_uri = "qemu+sshcmd://user@192.168.1.12/system"
+# obs_bridge_name = "br0"
+# obs_node        = { name = "obs1", ip = "192.168.1.69" }
+# metallb_range   = "192.168.1.96-192.168.1.99"

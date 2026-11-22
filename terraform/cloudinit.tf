@@ -42,4 +42,10 @@ resource "libvirt_volume" "seed" {
       url = libvirt_cloudinit_disk.seed[each.key].path
     }
   }
+
+  # The cloud-init ISO is generated under /tmp on the controller and is gone after a
+  # reboot. The seed is only read on first boot, so a missing source is not a change.
+  lifecycle {
+    ignore_changes = [create]
+  }
 }

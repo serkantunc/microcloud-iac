@@ -1,0 +1,15 @@
+version: 2
+ethernets:
+  mgmt:
+    match:
+      macaddress: "${mac}"
+    set-name: mgmt
+    dhcp4: false
+    dhcp6: false
+    addresses:
+      - ${ip}/${prefix}
+    routes:
+      - to: default
+        via: ${gateway}
+    nameservers:
+      addresses: [${join(", ", dns_servers)}]

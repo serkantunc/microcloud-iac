@@ -33,7 +33,7 @@ micro3  mgmt .63  uplink -  ceph 10.10.10.63  disks: vda OS, vdb Ceph, vdc local
 | OS | Ubuntu 26.04 LTS cloud image, shared as a read-only backing file (copy-on-write per node) |
 | Interfaces | Matched by MAC address and renamed by netplan (`mgmt`, `uplink`, `ceph`) |
 | Storage | `local` (ZFS on vdc), `remote` (Ceph RBD on vdb), `remote-fs` (CephFS) |
-| OVN | Uplink gateway 192.168.1.1, floating range 192.168.1.70–109 |
+| OVN | Uplink gateway 192.168.1.1, router addresses 192.168.1.70–79 |
 | Names | Node FQDNs under `home.arpa`, resolving to the management IP (not 127.0.1.1) |
 
 MAC addresses are derived from the node IP (`52:54:00:00:01:61` for `mgmt` on `.61`).
@@ -136,7 +136,7 @@ All settings are variables in `terraform/variables.tf`. Override them in
 | `bridge_name` | `br-mc` |
 | `gateway` / `dns_servers` | `192.168.1.1` / `["1.1.1.1", "192.168.1.1"]` |
 | `ceph_network_cidr` | `10.10.10.0/24` |
-| `ovn_ipv4_range` | `192.168.1.70-192.168.1.109` |
+| `ovn_ipv4_range` | `192.168.1.70-192.168.1.79` |
 | `domain` | `home.arpa` |
 | `ssh_public_key_path` | `~/.ssh/id_rsa.pub` |
 | `vm_console_password` | empty (console password login disabled) |

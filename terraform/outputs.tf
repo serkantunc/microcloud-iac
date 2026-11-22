@@ -12,3 +12,14 @@ output "nodes" {
     }
   }
 }
+
+output "obs" {
+  description = "Observability VM"
+  value = {
+    name = var.obs_node.name
+    ip   = var.obs_node.ip
+    fqdn = "${var.obs_node.name}.${var.domain}"
+    mac  = local.obs_mac
+    ssh  = "ssh ${var.vm_user}@${var.obs_node.ip}"
+  }
+}

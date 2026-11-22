@@ -26,6 +26,18 @@ resource "local_file" "ansible_inventory" {
             ovn_dns_servers   = join(",", var.dns_servers)
           }
         }
+        observability = {
+          hosts = {
+            (var.obs_node.name) = {
+              ansible_host = var.obs_node.ip
+            }
+          }
+          vars = {
+            ansible_user  = var.vm_user
+            node_domain   = var.domain
+            metallb_range = var.metallb_range
+          }
+        }
       }
     }
   })
